@@ -1,0 +1,58 @@
+name: sample-products-ci-workflow
+
+on:
+  workflow_call:
+    inputs:
+      dotnetVersion:
+        description: 'dotnet version'
+        required: true
+        type: string
+        default: '7.0.x'
+     
+env:
+  AZURE_FUNCTIONAPP_NAME: 'ra-ops-functions'   # set this to your function app name on Azure
+  AZURE_FUNCTIONAPP_PACKAGE_PATH: './functions' # set this to the path to your function app project, defaults to the repository root
+  NODE_VERSION: '14.x'                      # set this to the node version to use
+  MONGO_USERNAME: "test"
+  MONGO_PASSWORD: "test"
+  dotnet-version: '7.0.x' 
+
+jobs:
+  sample-products-CI-job:
+    runs-on: ubuntu-latest
+    environment: sandbox
+    
+    steps:
+  
+    - name: 'Show context'
+      run: echo '${{ toJson(github) }}'
+    - name: 'Checkout Source Code'                                                                                                                                                                             
+      uses: actions/checkout@v3
+    - name: Setup dotnet
+      uses: actions/setup-dotnet@v3
+      with:
+        dotnet-version: ${{ env.dotnet-version }}
+    # You can test your matrix by printing the current dotnet version
+    - name: Display dotnet version
+      run: dotnet --version
+    - name: 'Caching dependencies' 
+      uses: actions/cache@v3
+      with:
+        path: ~/.nuget/packages
+        # Look to see if there is a cache hit for the corresponding requirements file
+        key: ${{ runner.os }}-nuget-${{ hashFiles('**/packages.lock.json') }}
+        restore-keys: |
+          ${{ runner.os }}-nuget
+    - name: Install dependencies (dotnet restore)
+      run: dotnet restore
+    - name: Build package (dotnet build)
+      run: dotnet build --configuration Debug --no-restore 
+    - name: Test with dotnet (dotnet test)
+      run: dotnet test --logger trx --results-directory "TestResults-${{ env.dotnet-version }}"
+    - name: Upload dotnet test results
+      uses: actions/upload-artifact@v3
+      with:
+        name: dotnet-results-${{ env.dotnet-version }}
+        path: TestResults-${{ env.dotnet-version }}
+      # Use always() to always run this step to publish test results when there are test failures
+      if: ${{ always() }}
